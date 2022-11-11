@@ -15,6 +15,7 @@ const fn compute_reverse_hex_alphabet(alphabet: &[u8]) -> [u8; 256] {
     table
 }
 
+#[inline]
 pub fn encode(data: &[u8]) -> String {
     let mut output = String::with_capacity(data.len() * 2);
 
