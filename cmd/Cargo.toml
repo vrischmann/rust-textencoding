@@ -1,0 +1,15 @@
+[package]
+name = "textencoding-cli"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "tenc"
+path = "src/main.rs"
+
+[dependencies]
+textencoding = { path = "../lib" }
+
+anyhow = "1"
+
+clap = { version = "4", features = ["cargo"] }

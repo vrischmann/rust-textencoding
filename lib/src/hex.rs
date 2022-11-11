@@ -32,9 +32,11 @@ pub fn encode(data: &[u8]) -> String {
     output
 }
 
-#[derive(PartialEq, Eq, Debug)]
+#[derive(Debug, PartialEq, Eq, thiserror::Error)]
 pub enum DecodeError {
+    #[error("invalid length {0}")]
     InvalidLength(usize),
+    #[error("invalid char {0}")]
     InvalidChar(char),
 }
 
