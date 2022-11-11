@@ -1,0 +1,10 @@
+[package]
+name = "textencoding-c"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+name = "textencoding"
+crate-type = ["cdylib", "staticlib"]
+
+[dependencies]
