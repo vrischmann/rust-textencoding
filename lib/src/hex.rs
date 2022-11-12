@@ -1,4 +1,4 @@
-const HEX_ALPHABET: &[u8] = "0123456789abcdef".as_bytes();
+const HEX_ALPHABET: &[u8] = b"0123456789abcdef";
 
 const REVERSE_HEX_ALPHABET: [u8; 256] = compute_reverse_hex_alphabet(HEX_ALPHABET);
 
