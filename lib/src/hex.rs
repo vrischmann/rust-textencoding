@@ -158,4 +158,35 @@ mod tests {
         let result = decode(input);
         assert_eq!(result.unwrap_err(), DecodeError::InvalidLength(3));
     }
+
+    #[test]
+    fn rfc4648_test_vectors_should_work() {
+        let test_cases = vec![
+            ("", ""),
+            ("f", "66"),
+            ("fo", "666F"),
+            ("foo", "666F6F"),
+            ("foob", "666F6F62"),
+            ("fooba", "666F6F6261"),
+            ("foobar", "666F6F626172"),
+        ];
+
+        for tc in test_cases {
+            {
+                let result = encode_upper(tc.0.as_bytes());
+                assert_eq!(tc.1, result);
+
+                let decoded = decode(&result).unwrap();
+                assert_eq!(tc.0.as_bytes(), &decoded);
+            }
+
+            {
+                let result = encode_lower(tc.0.as_bytes());
+                assert_eq!(tc.1.to_lowercase(), result);
+
+                let decoded = decode(&result).unwrap();
+                assert_eq!(tc.0.as_bytes(), &decoded);
+            }
+        }
+    }
 }
