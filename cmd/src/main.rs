@@ -35,7 +35,13 @@ fn run_hex(args: &clap::ArgMatches) -> anyhow::Result<()> {
 
         writer.write_all(&decoded)?;
     } else {
-        let encoded = hex::encode(&input);
+        let upper = args.get_one::<bool>("upper").copied().unwrap_or_default();
+
+        let encoded = if upper {
+            hex::encode_upper(&input)
+        } else {
+            hex::encode_lower(&input)
+        };
 
         writer.write_all(encoded.as_bytes())?;
         writer.write_all(b"\n")?;
@@ -66,6 +72,14 @@ fn main() -> anyhow::Result<()> {
                         .long("decode")
                         .action(clap::ArgAction::SetTrue),
                 ),
+        )
+        .arg(
+            clap::Arg::new("upper")
+                .help("Encode using the uppercase alphabet")
+                .short('u')
+                .long("upper")
+                .action(clap::ArgAction::SetTrue)
+                .global(true),
         );
 
     let matches = root_command.get_matches();

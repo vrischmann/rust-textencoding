@@ -5,7 +5,7 @@ fn criterion_benchmark(c: &mut Criterion) {
     c.bench_function("encode", |b| {
         b.iter(|| {
             let data: [u8; 4] = [0xab, 0xbc, 0xbd, 0xcc];
-            hex::encode(&data);
+            hex::encode_lower(&data);
         })
     });
 }
