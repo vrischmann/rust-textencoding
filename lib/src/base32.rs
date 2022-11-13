@@ -114,26 +114,29 @@ impl Encoding {
             // output buffer: indeed, the last byte may not be present (meaning we need to pad with
             // zeroes).
             // This is why the buf[1], buf[3], buf[4] and buf[6] writes are split into two parts.
+            //
+            // Note: that we use binary literals to see more clearly what parts of the input
+            // bytes gets written into the output buffer.
 
-            buf[0] = (data[0] & 0xf8) >> 3;
-            buf[1] = (data[0] & 0x07) << 2;
+            buf[0] = (data[0] & 0b11111000) >> 3;
+            buf[1] = (data[0] & 0b00000111) << 2;
             if data.len() > 1 {
-                buf[1] |= (data[1] & 0xc0) >> 6;
-                buf[2] = (data[1] & 0x3e) >> 1;
-                buf[3] = (data[1] & 0x1) << 4;
+                buf[1] |= (data[1] & 0b11000000) >> 6;
+                buf[2] = (data[1] & 0b00111110) >> 1;
+                buf[3] = (data[1] & 0b00000001) << 4;
             }
             if data.len() > 2 {
-                buf[3] |= (data[2] & 0xf0) >> 4;
-                buf[4] = (data[2] & 0xf) << 1;
+                buf[3] |= (data[2] & 0b11110000) >> 4;
+                buf[4] = (data[2] & 0b00001111) << 1;
             }
             if data.len() > 3 {
-                buf[4] |= (data[3] & 0x80) >> 7;
-                buf[5] = (data[3] & 0x7c) >> 2;
-                buf[6] = (data[3] & 0x3) << 3;
+                buf[4] |= (data[3] & 0b10000000) >> 7;
+                buf[5] = (data[3] & 0b01111100) >> 2;
+                buf[6] = (data[3] & 0b00000011) << 3;
             }
             if data.len() > 4 {
-                buf[6] |= (data[4] & 0xe0) >> 5;
-                buf[7] = data[4] & 0x1f;
+                buf[6] |= (data[4] & 0b11100000) >> 5;
+                buf[7] = data[4] & 0b00011111;
             }
 
             for b in buf {
