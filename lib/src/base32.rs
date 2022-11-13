@@ -1,9 +1,13 @@
+use crate::helpers::compute_reverse_alphabet;
 use std::cmp::min;
 
 const RFC4648_LOWER_ALPHABET: &[u8] = b"abcdefghijklmnopqrstuvwxyz234567";
 const RFC4648_UPPER_ALPHABET: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
 const CROCKFORD_LOWER_ALPHABET: &[u8] = b"0123456789abcdefghjkmnpqrstvwxyz";
 const CROCKFORD_UPPER_ALPHABET: &[u8] = b"0123456789ABCDEFGHJKMNPQRSTVWXYZ";
+
+const REVERSE_RFC4648_LOWER_ALPHABET: [u8; 256] = compute_reverse_alphabet(RFC4648_LOWER_ALPHABET);
+const REVERSE_RFC4648_UPPER_ALPHABET: [u8; 256] = compute_reverse_alphabet(RFC4648_UPPER_ALPHABET);
 
 pub enum Alphabet {
     RFC4648Lower,
@@ -56,6 +60,28 @@ const INPUT_BLOCK_SIZE: usize = 5;
 const MAX_REMAINDER_SIZE: usize = INPUT_BLOCK_SIZE - 1;
 const OUTPUT_BLOCK_SIZE: usize = 8;
 
+fn decode_char(lower_alphabet: &[u8], upper_alphabet: &[u8], b: u8) -> Result<u8, DecodeError> {
+    let result = lower_alphabet[b as usize];
+    if result != 0xff {
+        return Ok(result);
+    }
+
+    let result = upper_alphabet[b as usize];
+    if result == 0xff {
+        return Err(DecodeError::InvalidChar(b as char));
+    }
+
+    Ok(result)
+}
+
+#[derive(Debug, PartialEq, Eq, thiserror::Error)]
+pub enum DecodeError {
+    #[error("invalid length {0}")]
+    InvalidLength(usize),
+    #[error("invalid char {0}")]
+    InvalidChar(char),
+}
+
 impl Encoding {
     pub fn builder() -> EncodingBuilder {
         EncodingBuilder {
@@ -82,6 +108,16 @@ impl Encoding {
             Alphabet::RFC4648Upper => RFC4648_UPPER_ALPHABET,
             Alphabet::CrockfordLower => CROCKFORD_LOWER_ALPHABET,
             Alphabet::CrockfordUpper => CROCKFORD_UPPER_ALPHABET,
+        }
+    }
+
+    fn reverse_alphabets(&self) -> (&[u8], &[u8]) {
+        match self.config.alphabet {
+            Alphabet::RFC4648Lower | Alphabet::RFC4648Upper => (
+                &REVERSE_RFC4648_LOWER_ALPHABET,
+                &REVERSE_RFC4648_UPPER_ALPHABET,
+            ),
+            Alphabet::CrockfordLower | Alphabet::CrockfordUpper => todo!(),
         }
     }
 
@@ -155,6 +191,44 @@ impl Encoding {
 
         output
     }
+
+    pub fn decode<T: ?Sized + AsRef<[u8]>>(&self, input: &T) -> Result<Vec<u8>, DecodeError> {
+        let mut data = input.as_ref();
+        let mut output: Vec<u8> = Vec::with_capacity(data.len()); // TODO(vincent): compute the real length
+
+        let (lower_alphabet, upper_alphabet) = self.reverse_alphabets();
+
+        while data.len() >= 8 {
+            let c0 = decode_char(lower_alphabet, upper_alphabet, data[0])?;
+            let c1 = decode_char(lower_alphabet, upper_alphabet, data[1])?;
+            let c2 = decode_char(lower_alphabet, upper_alphabet, data[2])?;
+            let c3 = decode_char(lower_alphabet, upper_alphabet, data[3])?;
+            let c4 = decode_char(lower_alphabet, upper_alphabet, data[4])?;
+            let c5 = decode_char(lower_alphabet, upper_alphabet, data[5])?;
+            let c6 = decode_char(lower_alphabet, upper_alphabet, data[6])?;
+            let c7 = decode_char(lower_alphabet, upper_alphabet, data[7])?;
+
+            // The following diagram (taken from the RFC4648) shows which input bits are contained in the output chars.
+            //
+            //     0        1        2        3        4
+            //  01234567 89012345 67890123 45678901 23456789
+            // +--------+--------+--------+--------+--------+
+            // |< 1 >< 2| >< 3 ><|.4 >< 5.|>< 6 ><.|7 >< 8 >|
+            // +--------+--------+--------+--------+--------+
+
+            let mut buf: [u8; 5] = [0xff; 5];
+            buf[0] = (c0 << 3) | ((c1 & 0b11100) >> 2);
+            buf[1] = ((c1 & 0b00011) << 6) | (c2 << 1) | ((c3 & 0b10000) >> 4);
+            buf[2] = ((c3 & 0b01111) << 4) | ((c4 & 0b11110) >> 1);
+            buf[3] = ((c4 & 0b00001) << 7) | (c5 << 2) | ((c6 & 0b11000) >> 3);
+            buf[4] = ((c6 & 0b00111) << 5) | c7;
+
+            data = &data[8..];
+            output.extend_from_slice(&buf);
+        }
+
+        Ok(output)
+    }
 }
 
 #[cfg(test)]
@@ -197,6 +271,29 @@ mod tests {
         for tc in test_cases {
             let result = encoding.encoded_len(tc.0);
             assert_eq!(tc.1, result);
+        }
+    }
+
+    #[test]
+    fn decode_should_work() {
+        let test_cases = vec![
+            ("", ""),
+            // ("f", "MY======"),
+            // ("fo", "MZXQ===="),
+            // ("foo", "MZXW6==="),
+            // ("foob", "MZXW6YQ="),
+            ("MZXW6YTB", "fooba"),
+            // ("foobar", "MZXW6YTBOI======"),
+        ];
+
+        let encoding = Encoding::builder().build();
+
+        for tc in test_cases {
+            let decoded = encoding.decode(tc.0).unwrap();
+            assert_eq!(tc.1.as_bytes(), &decoded);
+
+            let decoded = encoding.decode(&tc.0.to_uppercase()).unwrap();
+            assert_eq!(tc.1.as_bytes(), &decoded);
         }
     }
 

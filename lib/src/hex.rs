@@ -1,21 +1,10 @@
+use crate::helpers::compute_reverse_alphabet;
+
 const LOWER_ALPHABET: &[u8] = b"0123456789abcdef";
 const UPPER_ALPHABET: &[u8] = b"0123456789ABCDEF";
 
 const REVERSE_LOWER_ALPHABET: [u8; 256] = compute_reverse_alphabet(LOWER_ALPHABET);
 const REVERSE_UPPER_ALPHABET: [u8; 256] = compute_reverse_alphabet(UPPER_ALPHABET);
-
-const fn compute_reverse_alphabet(alphabet: &[u8]) -> [u8; 256] {
-    let mut table: [u8; 256] = [0xff; 256];
-
-    let mut i = 0;
-    while i < alphabet.len() {
-        let index = alphabet[i] as usize;
-        table[index] = i as u8;
-        i += 1;
-    }
-
-    table
-}
 
 #[inline]
 pub fn encode_upper<T: ?Sized + AsRef<[u8]>>(input: &T) -> String {
