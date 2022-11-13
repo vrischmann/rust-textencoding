@@ -125,21 +125,20 @@ fn decode_byte(b: u8) -> Result<u8, DecodeError> {
     Ok(result)
 }
 
-pub fn decode(data: &str) -> Result<Vec<u8>, DecodeError> {
+pub fn decode<T: ?Sized + AsRef<[u8]>>(input: &T) -> Result<Vec<u8>, DecodeError> {
+    let data = input.as_ref();
+
     if data.len() % 2 != 0 {
         return Err(DecodeError::InvalidLength(data.len()));
     }
 
     let mut output: Vec<u8> = Vec::with_capacity(data.len() / 2);
 
-    let bytes = data.as_bytes();
-
     let mut i = 0;
-    while i + 1 < bytes.len() {
-        let left = bytes[i];
-        let right = bytes[i + 1];
+    while i + 1 < data.len() {
+        let left = data[i];
+        let right = data[i + 1];
 
-        // D
         let left_byte = decode_byte(left)?;
         let right_byte = decode_byte(right)?;
 
@@ -203,6 +202,9 @@ mod tests {
 
         for input in inputs {
             let result = decode(input).unwrap();
+            assert_eq!(result, expected);
+
+            let result = decode(&input.to_string()).unwrap();
             assert_eq!(result, expected);
         }
     }
