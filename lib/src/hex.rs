@@ -18,13 +18,13 @@ const fn compute_reverse_alphabet(alphabet: &[u8]) -> [u8; 256] {
 }
 
 #[inline]
-pub fn encode_upper(data: &[u8]) -> String {
-    encode(Alphabet::Upper, data)
+pub fn encode_upper<T: ?Sized + AsRef<[u8]>>(input: &T) -> String {
+    encode(Alphabet::Upper, input)
 }
 
 #[inline]
-pub fn encode_lower(data: &[u8]) -> String {
-    encode(Alphabet::Lower, data)
+pub fn encode_lower<T: ?Sized + AsRef<[u8]>>(input: &T) -> String {
+    encode(Alphabet::Lower, input)
 }
 
 enum Alphabet {
@@ -32,11 +32,13 @@ enum Alphabet {
     Upper,
 }
 
-fn encode(alphabet: Alphabet, data: &[u8]) -> String {
+fn encode<T: ?Sized + AsRef<[u8]>>(alphabet: Alphabet, input: &T) -> String {
     let alphabet = match alphabet {
         Alphabet::Lower => LOWER_ALPHABET,
         Alphabet::Upper => UPPER_ALPHABET,
     };
+
+    let data = input.as_ref();
 
     let mut output = String::with_capacity(data.len() * 2);
 
