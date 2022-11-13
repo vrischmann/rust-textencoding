@@ -27,33 +27,76 @@ pub fn encode_lower<T: ?Sized + AsRef<[u8]>>(input: &T) -> String {
     encode(Alphabet::Lower, input)
 }
 
+#[inline]
+pub fn encode_lower_slice<T: ?Sized + AsRef<[u8]>>(
+    input: &T,
+    output: &mut [u8],
+) -> Result<(), EncodeError> {
+    encode_slice(Alphabet::Lower, input, output)
+}
+
+#[inline]
+pub fn encode_upper_slice<T: ?Sized + AsRef<[u8]>>(
+    input: &T,
+    output: &mut [u8],
+) -> Result<(), EncodeError> {
+    encode_slice(Alphabet::Upper, input, output)
+}
+
+#[derive(Debug, PartialEq, Eq, thiserror::Error)]
+pub enum EncodeError {
+    #[error("invalid output buffer length {0}")]
+    InvalidOutputLength(usize),
+}
+
 enum Alphabet {
     Lower,
     Upper,
 }
 
-fn encode<T: ?Sized + AsRef<[u8]>>(alphabet: Alphabet, input: &T) -> String {
+fn encode_slice<T: ?Sized + AsRef<[u8]>>(
+    alphabet: Alphabet,
+    input: &T,
+    output: &mut [u8],
+) -> Result<(), EncodeError> {
+    let data = input.as_ref();
+
+    if output.len() != data.len() * 2 {
+        return Err(EncodeError::InvalidOutputLength(output.len()));
+    }
+
     let alphabet = match alphabet {
         Alphabet::Lower => LOWER_ALPHABET,
         Alphabet::Upper => UPPER_ALPHABET,
     };
 
-    let data = input.as_ref();
-
-    let mut output = String::with_capacity(data.len() * 2);
-
+    let mut i = 0;
     for b in data {
         let left = b >> 4;
         let right = b & 0x0F;
 
-        let left_char = alphabet[left as usize] as char;
-        let right_char = alphabet[right as usize] as char;
+        let left_char = alphabet[left as usize];
+        let right_char = alphabet[right as usize];
 
-        output.push(left_char);
-        output.push(right_char);
+        output[i] = left_char;
+        output[i + 1] = right_char;
+        i += 2;
     }
 
-    output
+    Ok(())
+}
+
+fn encode<T: ?Sized + AsRef<[u8]>>(alphabet: Alphabet, input: &T) -> String {
+    let data = input.as_ref();
+
+    let mut output = Vec::new();
+    output.resize(data.len() * 2, 0);
+
+    encode_slice(alphabet, input, &mut output)
+        .expect("should be able to encode to a vec-created slice");
+
+    let result = String::from_utf8_lossy(&output);
+    result.to_string()
 }
 
 #[derive(Debug, PartialEq, Eq, thiserror::Error)]
@@ -125,6 +168,28 @@ mod tests {
             let expected = "ABADBAAC";
             let result = encode_upper(&input);
             assert_eq!(result, expected);
+        }
+    }
+
+    #[test]
+    fn encode_slice_should_work() {
+        let input: Vec<u8> = vec![0xab, 0xad, 0xba, 0xac];
+
+        let mut output = vec![0; input.len() * 2];
+
+        {
+            let expected = "abadbaac";
+            encode_lower_slice(&input, &mut output).unwrap();
+            assert_eq!(expected, String::from_utf8_lossy(&output));
+        }
+
+        {
+            output.clear();
+            output.resize(input.len() * 2, 0);
+
+            let expected = "ABADBAAC";
+            encode_upper_slice(&input, &mut output).unwrap();
+            assert_eq!(expected, String::from_utf8_lossy(&output));
         }
     }
 
