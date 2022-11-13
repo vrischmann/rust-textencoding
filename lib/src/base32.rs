@@ -85,8 +85,8 @@ impl Encoding {
         }
     }
 
-    pub fn encode(&self, input: &[u8]) -> String {
-        let mut data = input;
+    pub fn encode<T: ?Sized + AsRef<[u8]>>(&self, input: &T) -> String {
+        let mut data = input.as_ref();
         let mut output = String::with_capacity(self.encoded_len(data.len()));
 
         let alphabet = self.alphabet();
@@ -212,7 +212,7 @@ mod tests {
         let encoding = Encoding::builder().build();
 
         for tc in test_cases {
-            let result = encoding.encode(tc.0.as_bytes());
+            let result = encoding.encode(tc.0);
             assert_eq!(tc.1, result);
 
             // let decoded = encoding.decode(&result).unwrap();
@@ -235,7 +235,7 @@ mod tests {
         let encoding = Encoding::builder().padding(None).build();
 
         for tc in test_cases {
-            let result = encoding.encode(tc.0.as_bytes());
+            let result = encoding.encode(tc.0);
             assert_eq!(tc.1, result);
 
             // let decoded = encoding.decode(&result).unwrap();
