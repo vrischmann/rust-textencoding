@@ -70,17 +70,20 @@ fn encode_slice<T: ?Sized + AsRef<[u8]>>(
         Alphabet::Upper => UPPER_ALPHABET,
     };
 
-    let mut i = 0;
+    let mut sl = output;
+
     for b in data {
+        assert!(sl.len() >= 2);
+
         let left = b >> 4;
         let right = b & 0x0F;
 
         let left_char = alphabet[left as usize];
         let right_char = alphabet[right as usize];
 
-        output[i] = left_char;
-        output[i + 1] = right_char;
-        i += 2;
+        sl[0] = left_char;
+        sl[1] = right_char;
+        sl = &mut sl[2..];
     }
 
     Ok(())
