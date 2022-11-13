@@ -175,7 +175,7 @@ mod tests {
 
         for tc in test_cases {
             {
-                let result = encode_upper(tc.0.as_bytes());
+                let result = encode_upper(tc.0);
                 assert_eq!(tc.1, result);
 
                 let decoded = decode(&result).unwrap();
@@ -183,7 +183,7 @@ mod tests {
             }
 
             {
-                let result = encode_lower(tc.0.as_bytes());
+                let result = encode_lower(tc.0);
                 assert_eq!(tc.1.to_lowercase(), result);
 
                 let decoded = decode(&result).unwrap();
