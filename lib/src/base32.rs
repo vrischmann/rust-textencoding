@@ -197,6 +197,10 @@ impl Encoding {
 
         let (lower_alphabet, upper_alphabet) = self.reverse_alphabets();
 
+        if (data.len() % OUTPUT_BLOCK_SIZE) != 0 {
+            return Err(DecodeError::InvalidLength(data.len()));
+        }
+
         while data.len() >= 8 {
             let c0 = decode_char(lower_alphabet, upper_alphabet, data[0])?;
             let c1 = decode_char(lower_alphabet, upper_alphabet, data[1])?;
