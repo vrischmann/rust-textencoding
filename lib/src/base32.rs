@@ -9,6 +9,8 @@ const CROCKFORD_UPPER_ALPHABET: &[u8] = b"0123456789ABCDEFGHJKMNPQRSTVWXYZ";
 const REVERSE_RFC4648_LOWER_ALPHABET: [u8; 256] = compute_reverse_alphabet(RFC4648_LOWER_ALPHABET);
 const REVERSE_RFC4648_UPPER_ALPHABET: [u8; 256] = compute_reverse_alphabet(RFC4648_UPPER_ALPHABET);
 
+const PADDING_CHAR: u8 = b'=';
+
 pub enum Alphabet {
     RFC4648Lower,
     RFC4648Upper,
@@ -18,14 +20,14 @@ pub enum Alphabet {
 
 struct EncodingConfig {
     alphabet: Alphabet,
-    padding: Option<u8>,
+    padding: bool,
 }
 
 impl Default for EncodingConfig {
     fn default() -> Self {
         Self {
             alphabet: Alphabet::RFC4648Upper,
-            padding: Some(b'='),
+            padding: true,
         }
     }
 }
@@ -44,7 +46,7 @@ impl EncodingBuilder {
         self
     }
 
-    pub fn padding(mut self, padding: Option<u8>) -> Self {
+    pub fn padding(mut self, padding: bool) -> Self {
         self.config.padding = padding;
         self
     }
@@ -90,15 +92,12 @@ impl Encoding {
     }
 
     pub fn encoded_len(&self, n: usize) -> usize {
-        match self.config.padding {
-            None => {
-                let max_output_size = n * OUTPUT_BLOCK_SIZE + MAX_REMAINDER_SIZE;
-                max_output_size / INPUT_BLOCK_SIZE
-            }
-            Some(_) => {
-                let max_whole_input_bytes = n + MAX_REMAINDER_SIZE;
-                max_whole_input_bytes / INPUT_BLOCK_SIZE * OUTPUT_BLOCK_SIZE
-            }
+        if self.config.padding {
+            let max_whole_input_bytes = n + MAX_REMAINDER_SIZE;
+            max_whole_input_bytes / INPUT_BLOCK_SIZE * OUTPUT_BLOCK_SIZE
+        } else {
+            let max_output_size = n * OUTPUT_BLOCK_SIZE + MAX_REMAINDER_SIZE;
+            max_output_size / INPUT_BLOCK_SIZE
         }
     }
 
@@ -179,8 +178,8 @@ impl Encoding {
                 if b != 0xff {
                     let c = alphabet[b as usize] as char;
                     output.push(c);
-                } else if let Some(padding) = self.config.padding {
-                    output.push(padding as char);
+                } else if self.config.padding {
+                    output.push(PADDING_CHAR as char);
                 }
             }
 
@@ -250,7 +249,7 @@ mod tests {
 
     #[test]
     fn encoded_len_without_padding() {
-        let encoding = Encoding::builder().padding(None).build();
+        let encoding = Encoding::builder().padding(false).build();
 
         let result = encoding.encoded_len(1);
         assert_eq!(2, result);
@@ -332,7 +331,7 @@ mod tests {
             ("foobar", "MZXW6YTBOI"),
         ];
 
-        let encoding = Encoding::builder().padding(None).build();
+        let encoding = Encoding::builder().padding(false).build();
 
         for tc in test_cases {
             let result = encoding.encode(tc.0);
