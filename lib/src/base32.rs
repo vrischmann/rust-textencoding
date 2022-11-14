@@ -1,4 +1,4 @@
-use crate::helpers::compute_reverse_alphabet;
+use crate::alphabet::{compute_reverse, PaddingConfig};
 use std::cmp::min;
 
 const RFC4648_LOWER_ALPHABET: &[u8] = b"abcdefghijklmnopqrstuvwxyz234567";
@@ -6,10 +6,23 @@ const RFC4648_UPPER_ALPHABET: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
 const CROCKFORD_LOWER_ALPHABET: &[u8] = b"0123456789abcdefghjkmnpqrstvwxyz";
 const CROCKFORD_UPPER_ALPHABET: &[u8] = b"0123456789ABCDEFGHJKMNPQRSTVWXYZ";
 
-const REVERSE_RFC4648_LOWER_ALPHABET: [u8; 256] = compute_reverse_alphabet(RFC4648_LOWER_ALPHABET);
-const REVERSE_RFC4648_UPPER_ALPHABET: [u8; 256] = compute_reverse_alphabet(RFC4648_UPPER_ALPHABET);
+const REVERSE_RFC4648_LOWER_ALPHABET: [u8; 256] = compute_reverse(
+    RFC4648_LOWER_ALPHABET,
+    Some(PaddingConfig {
+        character: PADDING_CHAR,
+        sentinel: PADDING_SENTINEL,
+    }),
+);
+const REVERSE_RFC4648_UPPER_ALPHABET: [u8; 256] = compute_reverse(
+    RFC4648_UPPER_ALPHABET,
+    Some(PaddingConfig {
+        character: PADDING_CHAR,
+        sentinel: PADDING_SENTINEL,
+    }),
+);
 
 const PADDING_CHAR: u8 = b'=';
+const PADDING_SENTINEL: u8 = 32;
 
 pub enum Alphabet {
     RFC4648Lower,
