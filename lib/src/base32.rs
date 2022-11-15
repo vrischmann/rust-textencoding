@@ -1,4 +1,4 @@
-use crate::helpers::compute_reverse_alphabet;
+use crate::alphabet::{compute_reverse, PaddingConfig};
 use std::cmp::min;
 
 const RFC4648_LOWER_ALPHABET: &[u8] = b"abcdefghijklmnopqrstuvwxyz234567";
@@ -6,10 +6,23 @@ const RFC4648_UPPER_ALPHABET: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
 const CROCKFORD_LOWER_ALPHABET: &[u8] = b"0123456789abcdefghjkmnpqrstvwxyz";
 const CROCKFORD_UPPER_ALPHABET: &[u8] = b"0123456789ABCDEFGHJKMNPQRSTVWXYZ";
 
-const REVERSE_RFC4648_LOWER_ALPHABET: [u8; 256] = compute_reverse_alphabet(RFC4648_LOWER_ALPHABET);
-const REVERSE_RFC4648_UPPER_ALPHABET: [u8; 256] = compute_reverse_alphabet(RFC4648_UPPER_ALPHABET);
+const REVERSE_RFC4648_LOWER_ALPHABET: [u8; 256] = compute_reverse(
+    RFC4648_LOWER_ALPHABET,
+    Some(PaddingConfig {
+        character: PADDING_CHAR,
+        sentinel: PADDING_SENTINEL,
+    }),
+);
+const REVERSE_RFC4648_UPPER_ALPHABET: [u8; 256] = compute_reverse(
+    RFC4648_UPPER_ALPHABET,
+    Some(PaddingConfig {
+        character: PADDING_CHAR,
+        sentinel: PADDING_SENTINEL,
+    }),
+);
 
 const PADDING_CHAR: u8 = b'=';
+const PADDING_SENTINEL: u8 = 32;
 
 pub enum Alphabet {
     RFC4648Lower,
@@ -62,18 +75,37 @@ const INPUT_BLOCK_SIZE: usize = 5;
 const MAX_REMAINDER_SIZE: usize = INPUT_BLOCK_SIZE - 1;
 const OUTPUT_BLOCK_SIZE: usize = 8;
 
-fn decode_char(lower_alphabet: &[u8], upper_alphabet: &[u8], b: u8) -> Result<u8, DecodeError> {
-    let result = lower_alphabet[b as usize];
-    if result != 0xff {
-        return Ok(result);
+#[inline]
+fn decode_chars(
+    lower_alphabet: &[u8],
+    upper_alphabet: &[u8],
+    input: &[u8],
+) -> Result<[u8; 8], DecodeError> {
+    assert!(input.len() == 8);
+
+    let mut bytes: [u8; 8] = [0xff; 8];
+
+    let mut i = 0;
+    while i < bytes.len() {
+        let b = input[i];
+
+        bytes[i] = {
+            let result = lower_alphabet[b as usize];
+            if result != 0xff {
+                result
+            } else {
+                let result = upper_alphabet[b as usize];
+                if result == 0xff {
+                    return Err(DecodeError::InvalidChar(b as char));
+                }
+                result
+            }
+        };
+
+        i += 1;
     }
 
-    let result = upper_alphabet[b as usize];
-    if result == 0xff {
-        return Err(DecodeError::InvalidChar(b as char));
-    }
-
-    Ok(result)
+    Ok(bytes)
 }
 
 #[derive(Debug, PartialEq, Eq, thiserror::Error)]
@@ -82,6 +114,8 @@ pub enum DecodeError {
     InvalidLength(usize),
     #[error("invalid char {0}")]
     InvalidChar(char),
+    #[error("invalid padding")]
+    InvalidPadding,
 }
 
 impl Encoding {
@@ -195,21 +229,48 @@ impl Encoding {
         let mut data = input.as_ref();
         let mut output: Vec<u8> = Vec::with_capacity(data.len()); // TODO(vincent): compute the real length
 
-        let (lower_alphabet, upper_alphabet) = self.reverse_alphabets();
-
         if (data.len() % OUTPUT_BLOCK_SIZE) != 0 {
             return Err(DecodeError::InvalidLength(data.len()));
         }
 
-        while data.len() >= 8 {
-            let c0 = decode_char(lower_alphabet, upper_alphabet, data[0])?;
-            let c1 = decode_char(lower_alphabet, upper_alphabet, data[1])?;
-            let c2 = decode_char(lower_alphabet, upper_alphabet, data[2])?;
-            let c3 = decode_char(lower_alphabet, upper_alphabet, data[3])?;
-            let c4 = decode_char(lower_alphabet, upper_alphabet, data[4])?;
-            let c5 = decode_char(lower_alphabet, upper_alphabet, data[5])?;
-            let c6 = decode_char(lower_alphabet, upper_alphabet, data[6])?;
-            let c7 = decode_char(lower_alphabet, upper_alphabet, data[7])?;
+        let (lower_alphabet, upper_alphabet) = self.reverse_alphabets();
+
+        while data.len() >= OUTPUT_BLOCK_SIZE {
+            let bytes = decode_chars(lower_alphabet, upper_alphabet, &data[0..OUTPUT_BLOCK_SIZE])?;
+            data = &data[OUTPUT_BLOCK_SIZE..];
+
+            let c0 = bytes[0];
+            let c1 = bytes[1];
+            let c2 = bytes[2];
+            let c3 = bytes[3];
+            let c4 = bytes[4];
+            let c5 = bytes[5];
+            let c6 = bytes[6];
+            let c7 = bytes[7];
+
+            // Validate the padding if necessary
+            if self.config.padding {
+                // 1. First two chars can never be a padding char
+                if c0 == PADDING_SENTINEL || c1 == PADDING_SENTINEL {
+                    return Err(DecodeError::InvalidPadding);
+                }
+
+                if data.is_empty() {
+                    // 2. If there is no more data following we check that the padding makes sense;
+                    // if a byte is the padding sentinel the next byte has to be the sentinel too
+
+                    let mut i = 0;
+                    while i + 1 < bytes.len() {
+                        if bytes[i] == PADDING_SENTINEL && bytes[i + 1] != PADDING_SENTINEL {
+                            return Err(DecodeError::InvalidPadding);
+                        }
+                        i += 1;
+                    }
+                } else if bytes.contains(&PADDING_SENTINEL) {
+                    // 3. If there is more data we can't have any padding
+                    return Err(DecodeError::InvalidPadding);
+                }
+            }
 
             // The following diagram (taken from the RFC4648) shows which input bits are contained in the output chars.
             //
@@ -220,14 +281,43 @@ impl Encoding {
             // +--------+--------+--------+--------+--------+
 
             let mut buf: [u8; 5] = [0xff; 5];
-            buf[0] = (c0 << 3) | ((c1 & 0b11100) >> 2);
-            buf[1] = ((c1 & 0b00011) << 6) | (c2 << 1) | ((c3 & 0b10000) >> 4);
+            buf[0] = ((c0 & 0b11111) << 3) | ((c1 & 0b11100) >> 2);
+            buf[1] = ((c1 & 0b00011) << 6) | ((c2 & 0b11111) << 1) | ((c3 & 0b10000) >> 4);
             buf[2] = ((c3 & 0b01111) << 4) | ((c4 & 0b11110) >> 1);
-            buf[3] = ((c4 & 0b00001) << 7) | (c5 << 2) | ((c6 & 0b11000) >> 3);
-            buf[4] = ((c6 & 0b00111) << 5) | c7;
+            buf[3] = ((c4 & 0b00001) << 7) | ((c5 & 0b11111) << 2) | ((c6 & 0b11000) >> 3);
+            buf[4] = ((c6 & 0b00111) << 5) | (c7 & 0b11111);
 
-            data = &data[8..];
-            output.extend_from_slice(&buf);
+            if self.config.padding {
+                if c7 != PADDING_SENTINEL {
+                    output.extend_from_slice(&buf);
+                } else if c7 == PADDING_SENTINEL && c6 != PADDING_SENTINEL {
+                    output.extend_from_slice(&buf[0..4]);
+                } else if c7 == PADDING_SENTINEL
+                    && c6 == PADDING_SENTINEL
+                    && c5 == PADDING_SENTINEL
+                    && c4 != PADDING_SENTINEL
+                {
+                    output.extend_from_slice(&buf[0..3]);
+                } else if c7 == PADDING_SENTINEL
+                    && c6 == PADDING_SENTINEL
+                    && c5 == PADDING_SENTINEL
+                    && c4 == PADDING_SENTINEL
+                    && c3 != PADDING_SENTINEL
+                {
+                    output.extend_from_slice(&buf[0..2]);
+                } else if c7 == PADDING_SENTINEL
+                    && c6 == PADDING_SENTINEL
+                    && c5 == PADDING_SENTINEL
+                    && c4 == PADDING_SENTINEL
+                    && c3 == PADDING_SENTINEL
+                    && c2 == PADDING_SENTINEL
+                    && c1 != PADDING_SENTINEL
+                {
+                    output.extend_from_slice(&buf[0..1]);
+                }
+            } else {
+                output.extend_from_slice(&buf);
+            }
         }
 
         Ok(output)
@@ -281,12 +371,12 @@ mod tests {
     fn decode_should_work() {
         let test_cases = vec![
             ("", ""),
-            // ("f", "MY======"),
-            // ("fo", "MZXQ===="),
-            // ("foo", "MZXW6==="),
-            // ("foob", "MZXW6YQ="),
+            ("MY======", "f"),
+            ("MZXQ====", "fo"),
+            ("MZXW6===", "foo"),
+            ("MZXW6YQ=", "foob"),
             ("MZXW6YTB", "fooba"),
-            // ("foobar", "MZXW6YTBOI======"),
+            ("MZXW6YTBOI======", "foobar"),
         ];
 
         let encoding = Encoding::builder().build();
@@ -318,8 +408,8 @@ mod tests {
             let result = encoding.encode(tc.0);
             assert_eq!(tc.1, result);
 
-            // let decoded = encoding.decode(&result).unwrap();
-            // assert_eq!(tc.0.as_bytes(), &decoded);
+            let decoded = encoding.decode(&result).unwrap();
+            assert_eq!(tc.0.as_bytes(), &decoded);
         }
     }
 
@@ -343,6 +433,18 @@ mod tests {
 
             // let decoded = encoding.decode(&result).unwrap();
             // assert_eq!(tc.0.as_bytes(), &decoded);
+        }
+    }
+
+    #[test]
+    fn bad_padding_should_fail() {
+        let test_cases = vec!["==aaaaaa", "FF=A====", "FFFF=A==", "FFFFF=A="];
+
+        let encoding = Encoding::builder().padding(true).build();
+
+        for tc in test_cases {
+            let result = encoding.decode(tc);
+            assert_eq!(result, Err(DecodeError::InvalidPadding));
         }
     }
 }
