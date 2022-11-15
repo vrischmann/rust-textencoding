@@ -294,6 +294,7 @@ impl Encoding {
             buf[3] = ((c4 & 0b00001) << 7) | ((c5 & 0b11111) << 2) | ((c6 & 0b11000) >> 3);
             buf[4] = ((c6 & 0b00111) << 5) | (c7 & 0b11111);
 
+            // TODO(vincent): rework this to be simpler
             if self.config.padding {
                 if c7 != PADDING_SENTINEL {
                     output.extend_from_slice(&buf);
