@@ -279,10 +279,9 @@ impl Encoding {
             // |< 1 >< 2| >< 3 ><|.4 >< 5.|>< 6 ><.|7 >< 8 >|
             // +--------+--------+--------+--------+--------+
             //
-            // Note that if the input character is the padding char '=' then the resulting byte
+            // Note that if the input character is outside the alphabet then the resulting byte
             // will be the padding sentinel which is 32 or 0b100000.
-            // Because we mask with 0b11111 this means the sentinel will contribute to nothing in
-            // the result.
+            // Because we AND with at most 0b11111 the sentinel will contribute to nothing in the result.
             //
             // This is cool because we can keep the logic identical with or without padding.
 
