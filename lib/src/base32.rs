@@ -179,12 +179,11 @@ impl Encoding {
             // Because we use this loop to process incomplete blocks we have to check the length
             // before proceeding.
             //
-            // Specifically, chars that overlap two input bytes can't be written at once in the
-            // output buffer: indeed, the last byte may not be present (meaning we need to pad with
-            // zeroes).
+            // NOTE: chars that overlap two input bytes can't be written at once in the output buffer:
+            // indeed the second input byte may not be present.
             // This is why the buf[1], buf[3], buf[4] and buf[6] writes are split into two parts.
             //
-            // Note: that we use binary literals to see more clearly what parts of the input
+            // NOTE(vincent): we use binary literals to see more clearly what parts of the input
             // bytes gets written into the output buffer.
 
             buf[0] = (data[0] & 0b11111000) >> 3;
