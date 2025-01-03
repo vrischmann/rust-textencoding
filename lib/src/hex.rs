@@ -81,8 +81,7 @@ fn encode_slice<T: ?Sized + AsRef<[u8]>>(
 fn encode<T: ?Sized + AsRef<[u8]>>(alphabet: Alphabet, input: &T) -> String {
     let data = input.as_ref();
 
-    let mut output = Vec::new();
-    output.resize(data.len() * 2, 0);
+    let mut output = vec![0; data.len() * 2];
 
     encode_slice(alphabet, input, &mut output)
         .expect("should be able to encode to a vec-created slice");
